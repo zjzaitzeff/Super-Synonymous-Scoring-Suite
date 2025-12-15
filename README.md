@@ -18,6 +18,7 @@ docker build -t pipeline_snv .
 Once complete you can run the following examples in your terminal:
 
 docker run --rm -v $(pwd)/../inputs_test:/pipeline/inputs_test -v $(pwd)/../more_testing:/pipeline/more_testing pipeline_snv /pipeline/inputs_test /pipeline/more_testing /pipeline/ref/miR_Family_Info_Human.fa 500
+
 docker run --rm -v $(pwd)/../inputs_test:/pipeline/inputs_test -v $(pwd)/../outputs_test:/pipeline/outputs_test pipeline_snv /pipeline/inputs_test /pipeline/outputs_test /pipeline/ref/miR_Family_Info_Human.fa 500
 ------------------------------------
 
