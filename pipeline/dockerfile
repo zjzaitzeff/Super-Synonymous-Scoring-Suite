@@ -1,0 +1,104 @@
+FROM ubuntu:22.04
+
+# System deps
+RUN apt-get update && apt-get install -y wget bzip2 bash && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Miniconda
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh && \
+    bash miniconda.sh -b -p /opt/conda && \
+    rm miniconda.sh
+
+ENV PATH="/opt/conda/bin:${PATH}"
+
+RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
+# Create ViennaRNA conda env with miranda
+RUN conda create -y -n vienna_env \
+    -c conda-forge \
+    -c bioconda \
+    python=3.9 \
+    "numpy<2" \
+    viennarna \
+    miranda && \
+    conda clean -afy
+
+# Use bash for subsequent commands
+SHELL ["bash", "-c"]
+
+# Explicitly activate env for RUN directives
+RUN source /opt/conda/bin/activate vienna_env && \
+    echo "Environment activated."
+
+# Set environment as default PATH
+ENV CONDA_DEFAULT_ENV=vienna_env
+ENV PATH="/opt/conda/envs/vienna_env/bin:${PATH}"
+
+WORKDIR /pipeline
+COPY . /pipeline/
+
+# Ensure scripts are executable and have correct shebang
+RUN sed -i 's/\r$//' /pipeline/set_up_vienna.sh
+RUN sed -i 's/\r$//' /pipeline/run_vienna.sh
+RUN chmod +x /pipeline/set_up_vienna.sh /pipeline/run_vienna.sh
+
+# Run setup inside active conda env
+RUN source /opt/conda/bin/activate vienna_env && \
+    /pipeline/set_up_vienna.sh
+
+# these should make the pip installs work
+RUN apt-get update && apt-get install -y \
+build-essential \
+gcc \
+g++ \
+make \
+zlib1g-dev \
+libbz2-dev \
+liblzma-dev \
+&& rm -rf /var/lib/apt/lists/*
+# dependencies
+RUN /opt/conda/bin/conda run -n vienna_env pip install scipy 
+RUN /opt/conda/bin/conda run -n vienna_env pip install argparse 
+RUN /opt/conda/bin/conda run -n vienna_env pip install spliceai
+RUN /opt/conda/bin/conda run -n vienna_env pip install tensorflow
+RUN /opt/conda/bin/conda run -n vienna_env pip install setuptools
+RUN /opt/conda/envs/vienna_env/bin/pip install docopt selene-sdk 
+RUN /opt/conda/envs/vienna_env/bin/pip install torch torchvision
+RUN /opt/conda/envs/vienna_env/bin/pip install pandas tqdm argparse six
+RUN /opt/conda/bin/conda run -n vienna_env pip install pysam
+
+RUN chmod +x /pipeline/miRanda/miranda
+RUN chmod +x /pipeline/TargetScan/targetscan_70.pl
+
+RUN chmod +x /pipeline/predict_one_variant.sh
+
+SHELL ["bash", "-c"]
+RUN echo "source /opt/conda/bin/activate vienna_env" >> ~/.bashrc
+
+ENTRYPOINT ["/opt/conda/bin/conda", "run", "-n", "vienna_env", "/pipeline/predict_one_variant.sh"]
+CMD []
+
+
+#docker run --rm -v $(pwd)/../inputs_test:/app/inputs_test -v $(pwd)/../output_vienna:/app/output_vienna vienna /app/inputs_test/CDS-NP_056480.1-12-53315126-MANE.fa /app/output_vienna
+#/Users/zkjz/Desktop/Coding/Bioinformatics/pipeline_docker_prac/inputs_test/CDS-NP_056480.1-12-53315126-MANE.fa
+
+
+#build:
+    #docker build -t pipeline_snv .
+#test input:
+    #docker run --rm -v $(pwd)/../inputs_test:/pipeline/inputs_test -v $(pwd)/../outputs_test:/pipeline/outputs_test pipeline_snv /pipeline/inputs_test /pipeline/outputs_test /pipeline/ref/miR_Family_Info_Human.fa 500
+    #docker run --rm -v $(pwd)/../inputs_test:/pipeline/inputs_test -v $(pwd)/../more_testing:/pipeline/more_testing pipeline_snv /pipeline/inputs_test /pipeline/more_testing /pipeline/ref/miR_Family_Info_Human.fa 500
+# I ran this command to fix issues that docker has reading window frames
+# sed -i '' 's/\r$//' pipeline/predict_one_variant.sh
+#Building 4974.9s (21/21) FINISHED  
+# Building 3351.5s (34/34) FINISHED  12/8/2025
+# [+] Building 3290.5s (31/31) FINISHED 12/15/2025
+
+# ------
+#  > exporting to image:
+# ------
+# ERROR: failed to build: failed to solve: failed to extract layer sha256:715e2dc0313a664721e6024afee9d50a509ed7390ab0bcd8e214f06b0625bdcb: failed to Lchown "/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/1184/fs/pipeline/SPOT-RNA/input_tfr_files/DRD2.fasta.tfrecords" for UID 0, GID 0: lchown /var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/1184/fs/pipeline/SPOT-RNA/input_tfr_files/DRD2.fasta.tfrecords: no such file or directory
+
+
+# RNAddG_compute.pl in pita bin has vienna calls
